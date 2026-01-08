@@ -16,9 +16,9 @@ let dithered = okbayer::dither_bayer_oklab(
 
 ## Example Output
 
-Original | Dithered
+Original (Taken by me) | Dithered, 1.0 strength ([island-joy-16 palette](https://lospec.com/palette-list/island-joy-16))
 --- | ---
-![Original dog](images/dog_small.png) | ![Dithered dog](images/dithered_dog_small.png)
+![Original dog](images/flower.png) | ![Dithered dog](images/dithered_flower_1.0.png)
 
 ## Input/Output Format
 

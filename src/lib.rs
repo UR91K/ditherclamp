@@ -103,7 +103,7 @@ pub fn dither_bayer_oklab(
     height: u32,
     dither_strength: f32,
 ) -> Result<Vec<u8>, DitherError> {
-    // Input validation
+    // input validation
     if image.len() % 3 != 0 {
         return Err(DitherError::InvalidImageBufferSize);
     }
@@ -121,7 +121,7 @@ pub fn dither_bayer_oklab(
         });
     }
 
-    // Pre-convert palette to Oklab for efficiency
+    // pre compute OKlab palette
     let palette_rgb: Vec<(u8, u8, u8)> = palette
         .chunks_exact(3)
         .map(|rgb| (rgb[0], rgb[1], rgb[2]))
@@ -131,10 +131,9 @@ pub fn dither_bayer_oklab(
         .map(|&(r, g, b)| rgb_to_oklab(r, g, b))
         .collect();
 
-    // Prepare output buffer
     let mut output = vec![0u8; image.len()];
 
-    // Process each pixel
+    // process pixel by pixel
     for y in 0..height {
         for x in 0..width {
             let pixel_idx = ((y as usize) * (width as usize) + (x as usize)) * 3;
@@ -142,17 +141,13 @@ pub fn dither_bayer_oklab(
             let g = image[pixel_idx + 1];
             let b = image[pixel_idx + 2];
 
-            // Convert to Oklab
             let mut oklab = rgb_to_oklab(r, g, b);
 
-            // Add Bayer threshold to L channel (clamped to valid range)
             let threshold = bayer_threshold(x, y);
             oklab.l = (oklab.l + threshold * dither_strength * L_SCALE).clamp(0.0, 1.0);
 
-            // Find nearest palette color
             let (pr, pg, pb) = find_nearest_palette_color(oklab, &palette_oklab, &palette_rgb);
 
-            // Write to output
             output[pixel_idx] = pr;
             output[pixel_idx + 1] = pg;
             output[pixel_idx + 2] = pb;
@@ -162,17 +157,17 @@ pub fn dither_bayer_oklab(
     Ok(output)
 }
 
-/// Zero-allocation variant that writes to a pre-allocated output buffer.
-/// Same logic as dither_bayer_oklab but avoids allocation.
+/// Zero alloc variant that writes to a pre allocated output buffer
+/// Same logic as dither_bayer_oklab but avoids allocation
 pub fn dither_bayer_oklab_into(
     image: &[u8],
     palette: &[u8],
     width: u32,
     height: u32,
     dither_strength: f32,
-    output: &mut [u8],
+    output: &mut [u8], // pre allocated mutable output buffer
 ) -> Result<(), DitherError> {
-    // Input validation (same as dither_bayer_oklab)
+    // input validation (same as dither_bayer_oklab)
     if image.len() % 3 != 0 {
         return Err(DitherError::InvalidImageBufferSize);
     }
@@ -196,7 +191,6 @@ pub fn dither_bayer_oklab_into(
         });
     }
 
-    // Pre-convert palette to Oklab for efficiency
     let palette_rgb: Vec<(u8, u8, u8)> = palette
         .chunks_exact(3)
         .map(|rgb| (rgb[0], rgb[1], rgb[2]))
@@ -206,7 +200,6 @@ pub fn dither_bayer_oklab_into(
         .map(|&(r, g, b)| rgb_to_oklab(r, g, b))
         .collect();
 
-    // Process each pixel (same logic as dither_bayer_oklab)
     for y in 0..height {
         for x in 0..width {
             let pixel_idx = ((y as usize) * (width as usize) + (x as usize)) * 3;
@@ -214,17 +207,13 @@ pub fn dither_bayer_oklab_into(
             let g = image[pixel_idx + 1];
             let b = image[pixel_idx + 2];
 
-            // Convert to Oklab
             let mut oklab = rgb_to_oklab(r, g, b);
 
-            // Add Bayer threshold to L channel (clamped to valid range)
             let threshold = bayer_threshold(x, y);
             oklab.l = (oklab.l + threshold * dither_strength * L_SCALE).clamp(0.0, 1.0);
 
-            // Find nearest palette color
             let (pr, pg, pb) = find_nearest_palette_color(oklab, &palette_oklab, &palette_rgb);
 
-            // Write to output
             output[pixel_idx] = pr;
             output[pixel_idx + 1] = pg;
             output[pixel_idx + 2] = pb;
@@ -240,28 +229,28 @@ mod tests {
     use proptest::prelude::*;
     use std::collections::HashSet;
 
-    // Property-based tests
+    // property based tests
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
-        /// Property 1: RGB-Oklab Round-Trip Consistency
+        /// PROPERTY: RGB/OKlab round trip consistency
         /// For any valid sRGB color (r, g, b) where each component is in [0, 255],
         /// converting to Oklab and back to sRGB shall produce a color where each component
-        /// differs by at most 2 from the original (accounting for floating-point and gamma correction rounding).
+        /// differs by at most 2 from the original (accounting for floating-point and gamma correction rounding)
         #[test]
         fn rgb_oklab_round_trip_consistency(r: u8, g: u8, b: u8) {
             let oklab = rgb_to_oklab(r, g, b);
             let (r2, g2, b2) = oklab_to_rgb(oklab);
 
-            // Allow for small rounding errors due to floating point and gamma correction
+            // allow for small rounding errors due to floating point and gamma correction
             prop_assert!((r2 as i16 - r as i16).abs() <= 2);
             prop_assert!((g2 as i16 - g as i16).abs() <= 2);
             prop_assert!((b2 as i16 - b as i16).abs() <= 2);
         }
 
-        /// Property 2: Palette Matching Returns Minimum Distance
-        /// For any target Oklab color and non-empty palette, the returned palette color
-        /// shall have Euclidean distance less than or equal to all other palette colors' distances to the target.
+        /// PROPERTY: Palette matching returns minimum distance
+        /// For any target Oklab color and non empty palette, the returned palette color
+        /// shall have euclidean distance less than or equal to all other palette colors' distances to the target
         #[test]
         fn palette_matching_returns_minimum_distance(
             target_r: u8, target_g: u8, target_b: u8,
@@ -276,7 +265,7 @@ mod tests {
             let result_oklab = rgb_to_oklab(result_rgb.0, result_rgb.1, result_rgb.2);
             let min_distance = oklab_distance_squared(target_oklab, result_oklab);
 
-            // Verify this is indeed the minimum distance
+            // verify this is indeed the minimum distance
             for &palette_color in &palette {
                 let palette_oklab = rgb_to_oklab(palette_color.0, palette_color.1, palette_color.2);
                 let distance = oklab_distance_squared(target_oklab, palette_oklab);
@@ -284,8 +273,8 @@ mod tests {
             }
         }
 
-        /// Property 3: Bayer Threshold Wraps at 8x8
-        /// For any pixel coordinates (x, y), bayer_threshold(x, y) shall equal bayer_threshold(x % 8, y % 8).
+        /// PROPERTY: Bayer threshold wraps at 8x8
+        /// For any pixel coordinates (x, y), bayer_threshold(x, y) shall equal bayer_threshold(x % 8, y % 8)
         #[test]
         fn bayer_threshold_wraps_at_8x8(x: u32, y: u32) {
             let threshold = bayer_threshold(x, y);
@@ -293,8 +282,8 @@ mod tests {
             prop_assert_eq!(threshold, wrapped_threshold);
         }
 
-        /// Property 4: Output Buffer Size Invariant
-        /// For any valid image buffer of length n, the dithered output buffer shall also have length n.
+        /// PROPERTY: Output buffer size invariant
+        /// For any valid image buffer of length n, the dithered output buffer shall also have length n
         #[test]
         fn output_buffer_size_invariant(
             width in 1u32..20,
@@ -303,7 +292,7 @@ mod tests {
             palette in prop::collection::vec(0u8..=255, 3..30).prop_filter("Must be divisible by 3", |v| v.len() % 3 == 0 && !v.is_empty()),
             dither_strength in 0.0f32..1.0f32,
         ) {
-            // Only test when image size matches dimensions
+            // only test when image size matches dimensions
             let expected_size = (width as usize) * (height as usize) * 3;
             if image.len() == expected_size {
                 let result = dither_bayer_oklab(&image, &palette, width, height, dither_strength);
@@ -314,10 +303,10 @@ mod tests {
         }
     }
 
-    // Unit tests for specific examples and edge cases
+    // unit tests for specific examples and edge cases
 
-    /// Property 5: Output Pixels Are Palette Members
-    /// For any valid image and palette, every pixel in the output buffer shall exactly match one of the palette colors.
+    /// PROPERTY: Output pixels are palette members
+    /// For any valid image and palette, every pixel in the output buffer shall exactly match one of the palette colors
     #[test]
     fn output_pixels_are_palette_members() {
         let width = 2u32;
@@ -342,9 +331,9 @@ mod tests {
         }
     }
 
-    /// Property 6: Dithering Is Deterministic
+    /// PROPERTY: Dithering is deterministic
     /// For any valid inputs, calling dither_bayer_oklab twice with identical arguments
-    /// shall produce identical output buffers.
+    /// shall produce identical output buffers
     #[test]
     fn dithering_is_deterministic() {
         let width = 2u32;
@@ -357,9 +346,9 @@ mod tests {
         assert_eq!(output1, output2);
     }
 
-    /// Property 7: Zero Strength Equals Nearest-Neighbor
+    /// PROPERTY: Zero strength equals nearest neighbor
     /// For any valid image and palette, when dither_strength is 0.0, the output shall be identical
-    /// to simple nearest-neighbor quantization in Oklab space (no position-dependent variation).
+    /// to simple nearest neighbor quantization in Oklab space (no position dependent variation)
     #[test]
     fn zero_strength_equals_nearest_neighbor() {
         let width = 2u32;
@@ -369,7 +358,7 @@ mod tests {
 
         let dithered_output = dither_bayer_oklab(&image, &palette, width, height, 0.0).unwrap();
 
-        // Manually compute nearest-neighbor quantization
+        // manually compute nearest neighbor quantization
         let palette_rgb: Vec<(u8, u8, u8)> = palette
             .chunks_exact(3)
             .map(|rgb| (rgb[0], rgb[1], rgb[2]))
@@ -391,7 +380,7 @@ mod tests {
 
         assert_eq!(dithered_output, expected_output);
     }
-
+ 
     fn hex_str_to_u8(hex_str: &str) -> u8 {
         u8::from_str_radix(hex_str, 16).unwrap()
     }
@@ -410,7 +399,6 @@ mod tests {
     }
     
     fn palette_from_string(palette_string: &str) -> Vec<u8> {
-        // Parse each hex color into RGB bytes
         let mut palette: Vec<u8> = Vec::new();
         for line in palette_string.lines() {
             let line = line.trim();
@@ -423,9 +411,9 @@ mod tests {
             palette.push(b);
         }
         palette
-    }  
+    } 
 
-    // Unit tests for error conditions
+    // error conditions
 
     #[test]
     fn test_invalid_image_buffer_size() {
@@ -467,21 +455,22 @@ mod tests {
 
     #[test]
     fn test_bayer_matrix_values() {
-        // Test specific known values from the Bayer matrix
+        // test specific known values from the Bayer matrix
         let threshold_0_0 = bayer_threshold(0, 0);
         assert_eq!(threshold_0_0, 0.0 / 64.0 - 0.5);
 
         let threshold_7_7 = bayer_threshold(7, 7);
         assert_eq!(threshold_7_7, 21.0 / 64.0 - 0.5);
 
-        // Test wrapping at 8
+        // test wrapping at 8
         let threshold_8_8 = bayer_threshold(8, 8);
         assert_eq!(threshold_8_8, threshold_0_0);
     }
 
-    /// Regression test: Ensures SIMD optimizations produce byte-identical output.
-    /// This test validates that algorithm-level optimizations don't inadvertently
-    /// change the dithering output due to operation reordering or precision differences.
+    /// REGRESSION: SIMD optimizations produce byte identical output (if i decided to add them)
+    /// 
+    /// Validates that algorithm-level optimizations don't change the 
+    /// dithering output due to operation reordering or precision differences
     #[test]
     fn test_regression_known_output() {
         let palette_data = include_str!("../palettes/palette1.hex");
