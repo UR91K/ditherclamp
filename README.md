@@ -1,11 +1,11 @@
-# ditherclamp
+# okbayer
 
 A small Bayer dithering library. Applies Bayer 8x8 ordered dithering to an image in Oklab color space using a provided palette.
 
 ## Usage
 
 ```rust
-let dithered = ditherclamp::dither_bayer_oklab(
+let dithered = okbayer::dither_bayer_oklab(
     &image_bytes,
     &palette_bytes,
     width,
