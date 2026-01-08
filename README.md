@@ -22,18 +22,18 @@ Original | Dithered
 
 ## Input/Output Format
 
-- **Image**: `&[u8]` — RGB8 pixels, flat array. Length must be `width × height × 3`
-- **Palette**: `&[u8]` — RGB8 colors, flat array. Length must be divisible by 3, cannot be empty
-- **Output**: `Vec<u8>` — RGB8 dithered pixels, same length as input
+- Image: `&[u8]` - RGB8 pixels, flat array. Length must be `width*height*3`
+- Palette: `&[u8]` - RGB8 colors, flat array. Length must be divisible by 3, cannot be empty
+- Output: `Vec<u8>` - RGB8 dithered pixels, same length as input
 
 ## Error Handling
 
 Returns `Result<Vec<u8>, DitherError>`:
 
-- `InvalidImageBufferSize` — image length not divisible by 3
-- `InvalidPaletteBufferSize` — palette length not divisible by 3
-- `EmptyPalette` — palette is empty
-- `DimensionMismatch { expected, actual }` — image length doesn't match `width × height × 3`
+- `InvalidImageBufferSize` - image length not divisible by 3
+- `InvalidPaletteBufferSize` - palette length not divisible by 3
+- `EmptyPalette` - palette is empty
+- `DimensionMismatch { expected, actual }` - image length doesn't match `width × height × 3`
 
 ## License
 
